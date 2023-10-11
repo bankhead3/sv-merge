@@ -9,6 +9,7 @@ import pyranges as pr
 # *** identify overlapping svs across callers ***
 def compare(df1,out_dir,sample,slack=200,verbose=True):
     callers = sorted(list(set(df1['caller'])))
+    
     if verbose:
         print('comparing ' + ' vs. '.join(callers) + ' ...',end='')
 
@@ -18,7 +19,7 @@ def compare(df1,out_dir,sample,slack=200,verbose=True):
 
         idx_caller = df1['caller'] == caller
         idx_not_caller = df1['caller'] != caller        
-        df1a = df1[['chrom','pos','variant_id','event_id','mate_id','caller','variant_type']][idx_caller].copy()
+        df1a = df1[['sample','chrom','pos','variant_id','event_id','mate_id','caller','variant_type']][idx_caller].copy()
         df1b = df1[['chrom','pos','variant_id','event_id','mate_id','caller','variant_type']][idx_not_caller].copy()        
 
 

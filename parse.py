@@ -10,6 +10,10 @@ chroms = ['chr1','chr2','chr3','chr4','chr5','chr6','chr7','chr8','chr9','chr10'
 def parse_vcfs(vcf_list,out_dir,sample,verbose):
 
     filenames = []
+
+    # check if more than one svaba file - impacts combining calls when parsing
+    multi_svaba = True if len([file for file in vcf_list if 'svaba' in file]) > 1 else False
+    
     for my_vcf in vcf_list:
         # determine caller
         with open(my_vcf) as in1:
@@ -26,7 +30,7 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
         if caller == 'manta':
             filename = parse_manta(my_vcf,out_dir,sample,verbose)
         elif caller == 'svaba':
-            filename = parse_svaba(my_vcf,out_dir,sample,verbose)
+            filename = parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba)
         else:
             print('Caller not recognized!!')
             raise
@@ -77,6 +81,10 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
 
             info = vcf_record.INFO
 
+            # skip non-passing records - if PASS then filter returns empty list
+            if len(vcf_record.FILTER) != 0:
+                continue
+            
             record['variant_id'] = vcf_record.ID            
             record['variant_type'] = info['SVTYPE']
             record['chrom'],record['pos'],record['ref'],record['alt'] = vcf_record.CHROM,vcf_record.POS,vcf_record.REF,vcf_record.ALT
@@ -141,10 +149,10 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
 # ***
     
 # *** parse svaba sv vcf ***
-def parse_svaba(my_vcf,out_dir,sample,verbose):
+def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba):
 
     vcf_type = 'sv' if 'sv.vcf' in my_vcf else 'indel'
-    flag = 'w' if vcf_type == 'indel' else 'a'
+    flag = 'w' if vcf_type == 'indel' or not multi_svaba else 'a'
     
     outFile1 = out_dir + sample + '-svaba.txt'
     with open(outFile1,flag) as out1:
