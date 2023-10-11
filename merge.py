@@ -11,7 +11,7 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
     df_all['unique_variant_id'] = df_all['caller'] + '__' + df_all['variant_id']
     df_comp['unique_variant_id_matches'] = df_comp['caller2'] + '__' + df_comp['variant_id2']        
     unique_variant_ids = df_all['unique_variant_id']
-    
+
     written_variant_ids = dict()
     
     with open(outFile1,'w') as out1:
@@ -23,7 +23,7 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
         # get variant universe
         for unique_variant_id in unique_variant_ids:
             caller,variant_id = unique_variant_id.split('__')
-
+            
             # check that it hasn't already been written
             if unique_variant_id in written_variant_ids:
                 continue
@@ -36,22 +36,30 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
             idx_event = df_all['event_id'] == event_id[0]
             assert sum(idx_event) in [1,2]
             mate_id = list(df_all[idx_all]['mate_id'])[0]
-        
+            """
+            # TEMPORARY
+            if variant_id not in ["MantaBND:220715:0:1:1:0:0:0"]:
+                continue
+            print(variant_id)
+            print(written_variant_ids)
+            """
             # find out if there is a match in comp table
-            idx_comp_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_partial_event_match'] == True)
-            idx_comp_mate = (df_comp['variant_id'] == mate_id) & (df_comp['is_partial_event_match'] == True)        
+            idx_comp_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_event_match'] == True)   # was partial
+            idx_comp_mate = (df_comp['variant_id'] == mate_id) & (df_comp['is_event_match'] == True)         # was partial
 
             # ** category #1 - we have a match **
             if sum(idx_comp_variant) >= 1 and (sum(idx_comp_mate) >= 1 or mate_id == 'NA'):
+
                 # * variant_id - pull values from priortized variant caller *
                 # identify matching records to select from 
                 unique_variant_id_matches = list(df_comp[idx_comp_variant]['unique_variant_id_matches'])
 
                 unique_variant_id_candidates = [unique_variant_id] + unique_variant_id_matches
-                select_uvid = select_caller = 'NA'
+                select_uvid = 'NA'
+                select_caller = 'NA'
                 for caller_ in caller_order:
                     select_uvids = [id for id in unique_variant_id_candidates if caller_ in id and id not in written_variant_ids]
-                    if len(select_uvids) == 1:
+                    if len(select_uvids) >= 1:
                         select_uvid = select_uvids[0]
                         select_caller = caller_
                         break
@@ -61,7 +69,7 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
 
                 # update with missing columns
                 record['is_matching'] = 'Y'                
-                record['callers'] = ';'.join(sorted([uvid.split('__')[0] for uvid in unique_variant_id_candidates]))
+                record['callers'] = ';'.join(sorted(list(set([uvid.split('__')[0] for uvid in unique_variant_id_candidates]))))
                 record['num_callers'] = len(unique_variant_id_candidates)
                 record['call_source'] = select_uvid.split('__')[0]
                 record['other_variant_ids'] = ';'.join([id for id in unique_variant_id_candidates if id != select_uvid])                                    
@@ -87,9 +95,9 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
                     if len(select_umids) == 0:
                         for caller_ in caller_order:
                             select_umids = [id for id in unique_mate_id_candidates if caller_ in id and id not in written_variant_ids]                        
-                            if len(select_umids) == 1:
+                            if len(select_umids) >= 1:
                                 break                    
-                    assert len(select_umids) == 1
+                    assert len(select_umids) >= 1
 
                     select_umid = select_umids[0]                    
                     record = df_all[df_all['unique_variant_id'] == select_umid].squeeze()
@@ -97,7 +105,7 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
 
                     # update with missing columns
                     record['is_matching'] = 'Y'
-                    record['callers'] = ';'.join(sorted([umid.split('__')[0] for umid in unique_mate_id_candidates]))
+                    record['callers'] = ';'.join(sorted(list(set([umid.split('__')[0] for umid in unique_mate_id_candidates]))))
                     record['num_callers'] = len(unique_mate_id_candidates)
                     record['call_source'] = select_umid.split('__')[0]
                     record['other_variant_ids'] = ';'.join([id for id in unique_mate_id_candidates if id != select_umid])                    

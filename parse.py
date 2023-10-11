@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# parse vcf files
 
 import pandas as pd
 import vcf,os,re
@@ -28,7 +29,8 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
 
         # call parse function
         if caller == 'manta':
-            filename = parse_manta(my_vcf,out_dir,sample,verbose)
+            filename1 = parse_manta(my_vcf,out_dir,sample,verbose)
+            filename = modify_manta(filename1,out_dir,sample,verbose) # generated updated manta call have 2 break points per manta del,ins,dup event
         elif caller == 'svaba':
             filename = parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba)
         else:
@@ -52,6 +54,65 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
     df_all = df_all.reset_index(drop = True)
     return df_all
 # ***
+
+# *** modify manta calls to be comparable with other sv callers ***
+def modify_manta(inFile,out_dir,sample,verbose):
+    df = pd.read_csv(inFile,sep="\t",na_values = 'NA',na_filter = False)
+    outFile1 = out_dir + sample + '-manta_modified.txt'
+    with open(outFile1,'w') as out1:
+        # assemble and write yo header
+        header = ['sample','caller','event_id','variant_id','variant_type','chrom','pos','ref','alt','mate_id','tumor_discordant_rs','tumor_spanning_rs','tumor_dp','intra_chrom_event_length']
+        out1.write('\t'.join(header) + '\n')
+
+        if verbose:
+            print('modifying manta calls for compatibility ...',end='')
+
+        for index,row in df.iterrows():
+            variant_type = row['variant_type']
+#            print(list(row))
+            if variant_type == 'BND':
+                lineOut = [str(field) for field in list(row)]
+                out1.write('\t'.join(lineOut) + '\n')
+            elif variant_type in ['DEL','DUP']:
+                # write first entry
+                variant_id = row['variant_id']
+                row['variant_id'] = variant_id + '_bp1'
+                row['mate_id'] = variant_id + '_bp2'                
+                lineOut = [str(field) for field in list(row)]
+                out1.write('\t'.join(lineOut) + '\n')
+
+                # write first entry
+                row['variant_id'] = variant_id + '_bp2'
+                row['mate_id'] = variant_id + '_bp1'                                
+                event_length = int(row['intra_chrom_event_length'])
+                row['pos'] = str(int(row['pos']) + event_length)
+                lineOut = [str(field) for field in list(row)]
+                out1.write('\t'.join(lineOut) + '\n')
+            elif variant_type == 'INS':
+                # write first entry
+                variant_id = row['variant_id']
+                row['variant_id'] = variant_id + '_bp1'
+                row['mate_id'] = variant_id + '_bp2'                
+                lineOut = [str(field) for field in list(row)]
+                out1.write('\t'.join(lineOut) + '\n')
+
+                # write first entry
+                row['variant_id'] = variant_id + '_bp2'
+                row['mate_id'] = variant_id + '_bp1'                                
+                row['pos'] = str(int(row['pos']) + 1)
+                lineOut = [str(field) for field in list(row)]
+                out1.write('\t'.join(lineOut) + '\n')
+            else:
+                print(variant_type)
+                print(row)
+                raise 'i no understand'
+
+    if verbose:                
+        print('done')
+    return outFile1
+
+
+            
 
 # *** parse manta vcf and return df ***
 def parse_manta(my_vcf,out_dir,sample,verbose):
@@ -124,7 +185,7 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
                     values2 = [0,0] if not hasattr(vcf_record.samples[tumor_idx].data,'SR') else vcf_record.samples[tumor_idx].data.SR
                     record['tumor_dp'] = int(values1[0]) + int(values1[1]) + int(values2[0]) + int(values2[1])
 
-                # attempt to infer chrom length...
+                # attempt to infer intra chrom length...
                 record['intra_chrom_event_length'] = 'NA' if 'SVLEN' not in info else str(abs(int(info['SVLEN'][0])))
                 if record['intra_chrom_event_length'] == 'NA' and record['variant_type'] == 'INS':
                     record['intra_chrom_event_length'] == 0

@@ -34,53 +34,51 @@ def compare(df1,out_dir,sample,slack=200,verbose=True):
         # add difference
         df_joined = pr_joined.df
         df_joined['difference'] = abs(df_joined['pos'] - df_joined['pos2'])
-        
-        # polish columns 
-        dfj_sorted = df_joined.sort_values(by=['caller','difference','pos2','variant_id2'], ascending = [True,True,True,True])
-
-        idx_first_duplicate = ~ dfj_sorted['variant_id'].duplicated(keep='first')
-        dfj_sorted['is_variant_match'] = idx_first_duplicate
-
-        dfjs_polished = dfj_sorted.sort_values(by=['chrom','pos','difference'], ascending = [True,True,True])
-        dfjs_polished.drop(['Chromosome','Start','End','Start2','End2'],inplace=True,axis=1)
-        dfjs_polished.reset_index(drop = True)
+        df_joined['is_variant_match'] = True
 
         if first:
-            df_comp = dfjs_polished
+            df_comp = df_joined
             first = False
         else:
-            df_comp = pd.concat([df_comp,dfjs_polished],axis=0)
+            df_comp = pd.concat([df_comp,df_joined],axis=0)            
 
     # ** determine if mate ids match **
     df_comp = df_comp.reset_index(drop = True)
     df_comp['is_event_match'] = False
-    df_comp['is_partial_event_match'] = False    
     for index,row in df_comp.iterrows():
         variant_id = row['variant_id']
         mate_id = row['mate_id']
         mate_id2 = row['mate_id2']        
         event_id = row['event_id']
+        event_id2 = row['event_id2']        
         is_variant_match = row['is_variant_match']
         variant_type = row['variant_type']
         variant_type2 = row['variant_type2']        
 
-        # check number of events associated with variant 
-        idx_event_matches = (df_comp['event_id'] == event_id) & (df_comp['is_variant_match'] == True)
+        # check number of events associated with variant
+        idx_event_matches = (df_comp['event_id'] == event_id) & (df_comp['is_variant_match'] == True) & (df_comp['event_id2'] == event_id2)
+        idx_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_variant_match'] == True) & idx_event_matches
+        idx_mate = (df_comp['variant_id'] == mate_id) & (df_comp['is_variant_match'] == True) & idx_event_matches
         num_event_variant_matches = sum(idx_event_matches)
-        assert num_event_variant_matches in [1,2]
-        num_unique_event_matches = len(list(set(df_comp[idx_event_matches]['event_id2'])))                
+
+        # need to make sure that variant and mate map to different variant_ids
+        matching_variant_id = list(set(df_comp['variant_id2'][idx_variant]))
+        matching_variant_id2 = list(set(df_comp['variant_id2'][idx_mate]))
+        ambig = True if len(matching_variant_id) == 1 and len(matching_variant_id2) == 1 and matching_variant_id[0] == matching_variant_id2[0] else False
 
         # strict bnd to bnd comparison does not work well between manta and svaba since manta represents many svs as single bps in vcf
-        if is_variant_match and mate_id == 'NA' and mate_id2 == 'NA' and num_event_variant_matches == 1:
-            df_comp.loc[index,'is_event_match'] = True            
-        elif is_variant_match and mate_id != 'NA' and mate_id2 != 'NA' and num_event_variant_matches == 2 and num_unique_event_matches == 1:
+        if is_variant_match and num_event_variant_matches == 2 and sum(idx_variant) >= 1 and sum(idx_mate) >= 1 and not ambig:
             df_comp.loc[index,'is_event_match'] = True
-
-        # less stringent comparison just requires that variants in the vcf match up for a given event 
-        if is_variant_match and mate_id == 'NA':
-            df_comp.loc[index,'is_partial_event_match'] = True
-        elif is_variant_match and mate_id != 'NA' and num_event_variant_matches == 2 and num_unique_event_matches >= 1:
-            df_comp.loc[index,'is_partial_event_match'] = True
+        """
+        # for troubleshooting
+        if event_id == "1043085:1":
+            print(variant_id)
+            print(num_event_variant_matches)
+            print(sum(idx_variant))
+            print(sum(idx_mate))
+            print(df_comp.loc[index,])
+            print('.')
+        """
 
     outFile1 = out_dir + sample + '-comparison.txt'    
     df_comp.to_csv(outFile1,sep="\t",index = False)
