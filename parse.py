@@ -73,7 +73,7 @@ def modify_manta(inFile,out_dir,sample,verbose):
             if variant_type == 'BND':
                 lineOut = [str(field) for field in list(row)]
                 out1.write('\t'.join(lineOut) + '\n')
-            elif variant_type in ['DEL','DUP']:
+            elif variant_type in ['DEL','DUP','INV']:
                 # write first entry
                 variant_id = row['variant_id']
                 row['variant_id'] = variant_id + '_bp1'
