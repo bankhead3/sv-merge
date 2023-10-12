@@ -20,10 +20,10 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
         with open(my_vcf) as in1:
             caller = 'NA'
             for line in in1:
-                if 'manta' in line:
+                if 'manta' in line or 'Manta' in line:
                     caller = 'manta'
                     break
-                elif 'svaba' in line and 'sv' in my_vcf:
+                elif 'svaba' in line:
                     caller = 'svaba'
                     break
 
@@ -125,7 +125,7 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
         if verbose:
             print('parsing ' + my_vcf + ' ...',end='')
         vcf_reader = vcf.Reader(filename=my_vcf)
-
+        """
         # determine genotype idx
         call=vcf_reader.metadata['cmdline'][0]
         tumor = re.sub('.*[-][-]tumorBam ','',call)
@@ -133,10 +133,17 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
         tumor = re.sub('.*[/]','',tumor)
 
         matches = [sample for sample in vcf_reader.samples if sample in tumor]
+        print(vcf_reader.samples)
+        print(tumor)
+        print(matches)
         assert len(matches) == 1
         match = matches[0]
         tumor_idx = vcf_reader.samples.index(match)
-
+        """
+        # ** above is not working - theory is that softlinks are screwing up bam name to match what is in the vcf **
+        # ** going to assume that last entry is tumor **
+        tumor_idx = len(vcf_reader.samples) - 1
+        
         for vcf_record in vcf_reader:
             record = {'sample':sample,'caller':'manta'}
 
@@ -227,12 +234,18 @@ def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba):
             print('parsing ' + my_vcf + ' ...',end='')    
         vcf_reader = vcf.Reader(filename=my_vcf)
         
+        """
+        # determine genotype idx
         # infer order of tumor vs. normal sample
         call=vcf_reader.metadata['source'][0]
         tumor = re.sub('.*[-]t ','',call)
         tumor = re.sub('[.]bam.*','.bam',tumor)
         assert tumor in vcf_reader.samples
         tumor_idx = vcf_reader.samples.index(tumor)
+        """
+        # ** above is not working - theory is that softlinks are screwing up bam name to match what is in the vcf **
+        # ** going to assume that last entry is tumor **
+        tumor_idx = len(vcf_reader.samples) - 1
 
         for vcf_record in vcf_reader:
             record = {'sample':sample,'caller':'svaba'}
