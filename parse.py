@@ -111,8 +111,51 @@ def modify_manta(inFile,out_dir,sample,verbose):
         print('done')
     return outFile1
 
+# *** determine which of the samples (if matched) are tumor ***
+# assumes higher discordant read count in the top x vcf calls
+def infer_tumor_idx(vcf_reader,caller):
+    num_calls = 30
+    counts = {0:[],1:[]}
 
-            
+    call_count = 0
+    for vcf_record in vcf_reader:
+        if caller == 'manta':
+            for idx in range(0,2):
+                # first take from split read support 
+                if hasattr(vcf_record.samples[idx].data,'SR'):
+                    counts[idx].append(vcf_record.samples[idx].data.SR[1])
+                else:
+                    # else take from spanning read support
+                    assert hasattr(vcf_record.samples[idx].data,'PR')
+                    counts[idx].append(vcf_record.samples[idx].data.PR[1])
+        elif caller == 'svaba':
+            for idx in range(0,2):
+                # first take from discordant read support if there is any
+                if vcf_record.samples[idx].data.DR != 0:
+                    counts[idx].append(vcf_record.samples[idx].data.DR)
+                else:
+                    # otherwise take from ad
+                    counts[idx].append(vcf_record.samples[idx].data.AD)
+        else:
+            raise 'i no understand now to infer_tumor_idx for this caller'
+        
+        # read the top x calls
+        call_count += 1
+        if call_count >= num_calls:
+            break
+
+    # sum then and return the index that has more
+    sums = {0:0,1:0}
+    for my_key in sums.keys():
+        for idx in range(num_calls):
+            sums[my_key] += counts[my_key][idx]
+
+    # throw a warning if second genotype is not selected
+    larger_idx = 1 if sums[1] > sums[0] else 0
+    if larger_idx != 1:
+        print('WARNING: first vcf genotype entry is being selected as tumor due to variant read support')
+        
+    return larger_idx
 
 # *** parse manta vcf and return df ***
 def parse_manta(my_vcf,out_dir,sample,verbose):
@@ -124,26 +167,18 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
 
         if verbose:
             print('parsing ' + my_vcf + ' ...',end='')
-        vcf_reader = vcf.Reader(filename=my_vcf)
-        """
-        # determine genotype idx
-        call=vcf_reader.metadata['cmdline'][0]
-        tumor = re.sub('.*[-][-]tumorBam ','',call)
-        tumor = re.sub('[.]bam.*','',tumor)
-        tumor = re.sub('.*[/]','',tumor)
 
-        matches = [sample for sample in vcf_reader.samples if sample in tumor]
-        print(vcf_reader.samples)
-        print(tumor)
-        print(matches)
-        assert len(matches) == 1
-        match = matches[0]
-        tumor_idx = vcf_reader.samples.index(match)
-        """
-        # ** above is not working - theory is that softlinks are screwing up bam name to match what is in the vcf **
-        # ** going to assume that last entry is tumor **
-        tumor_idx = len(vcf_reader.samples) - 1
-        
+        # determine which genotype field to read from as tumor
+        vcf_reader = vcf.Reader(filename=my_vcf)        
+        assert len(vcf_reader.samples) in [1,2]
+        if len(vcf_reader.samples) == 1:
+            tumor_idx = 0
+        else:
+            # since tumor may not always be last, confirm that it is and throw an warning if it's not
+            tumor_idx = infer_tumor_idx(vcf_reader, 'manta')
+
+        # iterate and read through vcf records
+        vcf_reader = vcf.Reader(filename=my_vcf)            
         for vcf_record in vcf_reader:
             record = {'sample':sample,'caller':'manta'}
 
@@ -233,20 +268,18 @@ def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba):
         if verbose:
             print('parsing ' + my_vcf + ' ...',end='')    
         vcf_reader = vcf.Reader(filename=my_vcf)
-        
-        """
-        # determine genotype idx
-        # infer order of tumor vs. normal sample
-        call=vcf_reader.metadata['source'][0]
-        tumor = re.sub('.*[-]t ','',call)
-        tumor = re.sub('[.]bam.*','.bam',tumor)
-        assert tumor in vcf_reader.samples
-        tumor_idx = vcf_reader.samples.index(tumor)
-        """
-        # ** above is not working - theory is that softlinks are screwing up bam name to match what is in the vcf **
-        # ** going to assume that last entry is tumor **
-        tumor_idx = len(vcf_reader.samples) - 1
 
+        # determine which genotype field to read from as tumor
+        vcf_reader = vcf.Reader(filename=my_vcf)        
+        assert len(vcf_reader.samples) in [1,2]
+        if len(vcf_reader.samples) == 1:
+            tumor_idx = 0
+        else:
+            # since tumor may not always be last, confirm that it is and throw an warning if it's not
+            tumor_idx = infer_tumor_idx(vcf_reader, 'svaba')
+
+        # iterate and read through vcf records
+        vcf_reader = vcf.Reader(filename=my_vcf)
         for vcf_record in vcf_reader:
             record = {'sample':sample,'caller':'svaba'}
 
