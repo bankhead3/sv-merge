@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 # create final table with calls merged such that variants are unique
 
-
 def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']):
     outFile1 = out_dir + sample + '-sv-merge.txt'
     if verbose:
@@ -10,9 +9,9 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
     # get list of variant universe
     df_all['unique_variant_id'] = df_all['caller'] + '__' + df_all['variant_id']
     df_comp['unique_variant_id_matches'] = df_comp['caller2'] + '__' + df_comp['variant_id2']        
-    unique_variant_ids = df_all['unique_variant_id']
+    unique_variant_ids = sorted(list(df_all['unique_variant_id']))
 
-    written_variant_ids = dict()
+    written_variant_ids = dict() # keep track of variants written so we don't write twice
     
     with open(outFile1,'w') as out1:
 
@@ -28,42 +27,40 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
             if unique_variant_id in written_variant_ids:
                 continue
 
-            # look up event and mate
+            # look up event
             idx_all = (df_all['variant_id'] == variant_id) & (df_all['caller'] == caller)
-            assert sum(idx_all) == 1          
+            assert sum(idx_all) == 1
             event_id = list(df_all[idx_all]['event_id'])
             assert len(event_id) == 1
-            idx_event = df_all['event_id'] == event_id[0]
-            assert sum(idx_event) in [1,2]
-            mate_id = list(df_all[idx_all]['mate_id'])[0]
-            """
-            # TEMPORARY
-            if variant_id not in ["MantaBND:220715:0:1:1:0:0:0"]:
-                continue
-            print(variant_id)
-            print(written_variant_ids)
-            """
+
             # find out if there is a match in comp table
-            idx_comp_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_event_match'] == True)   # was partial
-            idx_comp_mate = (df_comp['variant_id'] == mate_id) & (df_comp['is_event_match'] == True)         # was partial
+            idx_comp_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_event_match'] == True) 
 
             # ** category #1 - we have a match **
-            if sum(idx_comp_variant) >= 1 and (sum(idx_comp_mate) >= 1 or mate_id == 'NA'):
+            if sum(idx_comp_variant) >= 1:
 
                 # * variant_id - pull values from priortized variant caller *
-                # identify matching records to select from 
+                # identify matching records to select from across callers
                 unique_variant_id_matches = list(df_comp[idx_comp_variant]['unique_variant_id_matches'])
-
                 unique_variant_id_candidates = [unique_variant_id] + unique_variant_id_matches
-                select_uvid = 'NA'
-                select_caller = 'NA'
+
+                # identify which one should be sourced from
+                select_uvid = 'NA'                
                 for caller_ in caller_order:
-                    select_uvids = [id for id in unique_variant_id_candidates if caller_ in id and id not in written_variant_ids]
+                    select_uvids = sorted([id for id in unique_variant_id_candidates if caller_ in id and id not in written_variant_ids])
                     if len(select_uvids) >= 1:
                         select_uvid = select_uvids[0]
-                        select_caller = caller_
                         break
-
+                """
+                # for testing...
+                if variant_id in ['871774:1','871803:1','MantaBND:113677:0:2:0:0:0:1']:
+                    print(variant_id)
+                    print(unique_variant_id_matches)
+                    print(unique_variant_id_candidates)
+                    print(select_uvid)
+                    raise
+                """
+                    
                 record = df_all[df_all['unique_variant_id'] == select_uvid].squeeze()
                 record = record.to_dict()
 
@@ -80,45 +77,8 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
                     lineOut.append(str(record[field]))
                 out1.write('\t'.join(lineOut) + '\n')
 
-                # * mate_id - pull values from priortized variant caller *
-                # identify matching records to select from  # assume that if mate is NA then this holds for matches
-                unique_mate_id_candidates = []
-                if mate_id != 'NA' and caller + '__' + mate_id not in written_variant_ids:
-                    unique_mate_id_matches = list(df_comp[idx_comp_mate]['unique_variant_id_matches'])                
-
-                    unique_mate_id_candidates = [caller + '__' + mate_id] + unique_mate_id_matches
-                    select_umid = 'NA'
-
-                    # using same caller as for variant_id
-                    select_umids = [id for id in unique_mate_id_candidates if select_caller in id and id not in written_variant_ids]
-                    # it may be we already gave the mate away for a given caller
-                    if len(select_umids) == 0:
-                        for caller_ in caller_order:
-                            select_umids = [id for id in unique_mate_id_candidates if caller_ in id and id not in written_variant_ids]                        
-                            if len(select_umids) >= 1:
-                                break                    
-                    assert len(select_umids) >= 1
-
-                    select_umid = select_umids[0]                    
-                    record = df_all[df_all['unique_variant_id'] == select_umid].squeeze()
-                    record = record.to_dict()
-
-                    # update with missing columns
-                    record['is_matching'] = 'Y'
-                    record['callers'] = ';'.join(sorted(list(set([umid.split('__')[0] for umid in unique_mate_id_candidates]))))
-                    record['num_callers'] = len(unique_mate_id_candidates)
-                    record['call_source'] = select_umid.split('__')[0]
-                    record['other_variant_ids'] = ';'.join([id for id in unique_mate_id_candidates if id != select_umid])                    
-
-                    # gather and write lineOut
-                    lineOut = []
-                    for field in header:
-                        lineOut.append(str(record[field]))
-                    out1.write('\t'.join(lineOut) + '\n')
-
-                # record matching variant and mate_id of matching callers
-                combined_uvids = unique_variant_id_candidates + unique_mate_id_candidates
-                for uvid in combined_uvids:
+                # keep track of variants written
+                for uvid in unique_variant_id_candidates:
                     written_variant_ids[uvid] = '.'
                     
             # ** category #2 - no match **
@@ -140,28 +100,9 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
                     lineOut.append(str(record[field]))
                 out1.write('\t'.join(lineOut) + '\n')
 
-                # * mate_id - pull values from df_all from original caller *                 
-                if mate_id != 'NA' and caller + '__' + mate_id not in written_variant_ids:
-                    idx_all = (df_all['variant_id'] == mate_id) & (df_all['caller'] == caller)
-
-                    record = df_all[idx_all].squeeze()
-                    record = record.to_dict()
-
-                    # update with missing columns
-                    record['is_matching'] = 'N'                                    
-                    record['callers'] = caller
-                    record['num_callers'] = 1
-                    record['call_source'] = caller
-                    record['other_variant_ids'] = '.'                    
+                # keep track of variants written
+                written_variant_ids[unique_variant_id] = '.'
                 
-                    # gather and write lineOut
-                    lineOut = []
-                    for field in header:
-                        lineOut.append(str(record[field]))
-                    out1.write('\t'.join(lineOut) + '\n')
-
-            written_variant_ids[unique_variant_id] = '.'
-            written_variant_ids[caller + '__' + mate_id] = '.'
     if verbose:
         print('done')
 
