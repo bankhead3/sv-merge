@@ -22,8 +22,8 @@ def compare(df1,out_dir,sample,slack=200,verbose=True):
         df1a = df1[['sample','chrom','pos','variant_id','event_id','mate_id','caller','variant_type']][idx_caller & idx_manta_ins].copy()
         df1b = df1[['chrom','pos','variant_id','event_id','mate_id','caller','variant_type']][idx_not_caller & idx_manta_ins].copy()        
 
-        df1a['Start'] = df1a['pos'] - 1; df1a['End'] = df1a['pos']; df1a['Chromosome'] = df1a['chrom']
-        df1b['Start'] = df1b['pos'] - 1; df1b['End'] = df1b['pos']; df1b['Chromosome'] = df1b['chrom']        
+        df1a['Start'] = df1a['pos'].astype(int) - 1; df1a['End'] = df1a['pos'].astype(int); df1a['Chromosome'] = df1a['chrom']
+        df1b['Start'] = df1b['pos'].astype(int) - 1; df1b['End'] = df1b['pos'].astype(int); df1b['Chromosome'] = df1b['chrom']        
         
         pr1a = pr.PyRanges(df1a)
         pr1b = pr.PyRanges(df1b)        
@@ -32,7 +32,7 @@ def compare(df1,out_dir,sample,slack=200,verbose=True):
 
         # add difference
         df_joined = pr_joined.df
-        df_joined['difference'] = abs(df_joined['pos'] - df_joined['pos2'])
+        df_joined['difference'] = abs(df_joined['pos'].astype(int) - df_joined['pos2'].astype(int))
         df_joined['is_variant_match'] = True
 
         if first:
@@ -108,10 +108,16 @@ def compare(df1,out_dir,sample,slack=200,verbose=True):
                     if min_difference in differences1:
                         idx = differences1.index(min_difference)
                         variant1_match = variant1_matches[idx]
+                        # indicates both variants mapping to both variants in the same event - will likely be filtered out anyway
+                        if len(variant2_matches) == 1 and variant1_match == variant2_matches[0] and len(variant1_matches) == 2:
+                            continue
                         variant2_match = [variant for variant in variant2_matches if variant != variant1_match][0]
                     else:
                         idx = differences2.index(min_difference)
                         variant2_match = variant2_matches[idx]
+                        # indicates both variants mapping to both variants in the same event - will likely be filtered out anyway
+                        if len(variant1_matches) == 1 and variant2_match == variant1_matches[0] and len(variant2_matches) == 2:
+                            continue
                         variant1_match = [variant for variant in variant1_matches if variant != variant2_match][0]
 
                     # set only the best matching pair as a matching event

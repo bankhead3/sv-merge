@@ -43,7 +43,7 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
     # generate combined table 
     flag = None
     for filename in filenames:
-        df = pd.read_csv(filename,sep="\t",na_values = 'NA',na_filter = False)
+        df = pd.read_csv(filename,sep="\t",na_values = 'NA',na_filter = False, dtype = 'unicode')
         if flag == None:
             df_all = df.copy()
             flag = True
@@ -59,31 +59,29 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
 def modify_manta(inFile,out_dir,sample,verbose):
     df = pd.read_csv(inFile,sep="\t",na_values = 'NA',na_filter = False)
 
-    # ** manta labeling patch **
+    # ** manta variant_id labeing patch **
+    # updated to group by events and then iterate through events looking for out of order variant_id labels (manta issue)
+    print('checking event variant_id ordering...')    
     df = df.sort_values(by='variant_id')
-    events = sorted(list(set(list(df['event_id']))))
-    for event in events:
-        idx = df['event_id'] == event
-        idxs = list(df[idx].index)
-        assert len(idxs) <= 2
+    grouped_df = df.groupby('event_id')
+    for event,group in grouped_df:
+        assert len(group) <= 2
 
-        # for cases when we have 2 variants as part of the event
-        if len(idxs) == 2:
-            chrom1 = df.at[idxs[0],'chrom']
-            chrom2 = df.at[idxs[1],'chrom']
-            pos1 = df.at[idxs[0],'pos']
-            pos2 = df.at[idxs[1],'pos']
-            variant1 = df.at[idxs[0],'variant_id']
-            variant2 = df.at[idxs[1],'variant_id']            
+        # only care about events with 2 variants
+        if len(group) == 2:
+            
+            # Extract values for comparison
+            chrom1,chrom2 = group['chrom']
+            pos1,pos2 = group['pos']
+            variant1,variant2 = group['variant_id']
 
-            # swap if labels if pos2 is higher - otherwise granges will complain in combine script...
-            if chrom1 == chrom2 and int(pos1) > int(pos2):
-                df.at[idxs[0],'variant_id'] = variant2
-                df.at[idxs[1],'variant_id'] = variant1
-                df.at[idxs[0],'mate_id'] = variant1
-                df.at[idxs[1],'mate_id'] = variant2
+            # look for intra chom events that are out of order
+            if chrom1 == chrom2 and pos1 > pos2:
+                df.loc[group.index, 'variant_id'] = [variant2, variant1]
+                df.loc[group.index, 'mate_id'] = [variant1, variant2]
     df = df.sort_values(by='variant_id')
-    # ** 
+#    print('done')
+    # **
     
     outFile1 = out_dir + sample + '-manta_modified.txt'
     with open(outFile1,'w') as out1:

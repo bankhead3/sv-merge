@@ -45,9 +45,13 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
 
     # get list of variant universe
     df_all['unique_variant_id'] = df_all['caller'] + '__' + df_all['variant_id']
-    df_comp['unique_variant_id_matches'] = df_comp['caller2'] + '__' + df_comp['variant_id2']        
-    unique_variant_ids = sorted(list(df_all['unique_variant_id']))
+    df_all['unique_event_id'] = df_all['caller'] + '__' + df_all['event_id']    
+    df_comp['unique_variant_id_matches'] = df_comp['caller2'] + '__' + df_comp['variant_id2']
 
+    # re-index for faster lookup
+    df_all_idx = df_all.set_index('unique_variant_id')
+    df_all_idx.sort_index(inplace = True)
+    
     written_variant_ids = dict() # keep track of variants written so we don't write twice
     
     with open(outFile1,'w') as out1, open(outFile2,'w') as out2:
@@ -74,103 +78,100 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
             out2.write(row + '\n')                
         header2 = ['#CHROM','POS','ID','REF','ALT','QUAL','FILTER','INFO','FORMAT','tumor_sample']
         out2.write('\t'.join(header2) + '\n')        
-        
-        # get variant universe
-        for unique_variant_id in unique_variant_ids:
-            caller,variant_id = unique_variant_id.split('__')
 
-            # look up alt and make sure orientation information is present
-            # get rid of manta weirdness here...
-            idx_all = (df_all['variant_id'] == variant_id) & (df_all['caller'] == caller)
-            assert sum(idx_all) == 1
-            alt = list(df_all[idx_all]['alt'])[0]
-            
-            # check that it hasn't already been written
-            if unique_variant_id in written_variant_ids or not ('[' in alt or ']' in alt):
-                continue
+        # walk through event variant ids and lookup matches in comp table
+#        count = 0
+        grouped_df = df_all.groupby('unique_event_id')
+        for event_id,group in grouped_df:
+            for idx,row in group.iterrows():
+#                count += 1  # temp
+#                print(count) # temp
 
-            # look up event
-            event_id = list(df_all[idx_all]['event_id'])
-            assert len(event_id) == 1
+                unique_variant_id = row['unique_variant_id']
+                caller,variant_id = unique_variant_id.split('__')
 
-            # find out if there is a match in comp table
-            idx_comp_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_event_match'] == True) 
+                # check that it hasn't already been written and that it has orientation information
+                if unique_variant_id in written_variant_ids or not ('[' in row['alt'] or ']' in row['alt']):
+                    continue
 
-            # ** category #1 - we have a match **
-            if sum(idx_comp_variant) >= 1:
+                # find out if there is a match in comp table
+                idx_comp_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_event_match'] == True) 
 
-                # * variant_id - pull values from priortized variant caller *
-                # identify matching records to select from across callers
-                unique_variant_id_matches = list(df_comp[idx_comp_variant]['unique_variant_id_matches'])
-                unique_variant_id_candidates = [unique_variant_id] + unique_variant_id_matches
+                # ** category #1 - we have a match **
+                if sum(idx_comp_variant) >= 1:
 
-                # identify which one should be sourced from
-                select_uvid = 'NA'                
-                for caller_ in caller_order:
-                    select_uvids = sorted([id for id in unique_variant_id_candidates if caller_ in id and id not in written_variant_ids])
-                    if len(select_uvids) >= 1:
-                        select_uvid = select_uvids[0]
-                        break
-                """
-                # for testing...
-                if variant_id in ['871774:1','871803:1','MantaBND:113677:0:2:0:0:0:1']:
+                    # * variant_id - pull values from priortized variant caller *
+                    # identify matching records to select from across callers
+                    unique_variant_id_matches = list(df_comp[idx_comp_variant]['unique_variant_id_matches'])
+                    unique_variant_id_candidates = [unique_variant_id] + unique_variant_id_matches
+
+                    # identify which one should be sourced from
+                    select_uvid = 'NA'                
+                    for caller_ in caller_order:
+                        select_uvids = sorted([id for id in unique_variant_id_candidates if caller_ in id and id not in written_variant_ids])
+                        if len(select_uvids) >= 1:
+                            select_uvid = select_uvids[0]
+                            break
+                    """
+                    # for testing...
+                    if variant_id in ['871774:1','871803:1','MantaBND:113677:0:2:0:0:0:1']:
                     print(variant_id)
                     print(unique_variant_id_matches)
                     print(unique_variant_id_candidates)
                     print(select_uvid)
                     raise
-                """
+                    """
+
+                    record = df_all_idx.loc[[select_uvid],:].squeeze()  # use indexing for faster lookup
+                    record = record.to_dict()
+
+                    # update with missing columns
+                    record['is_matching'] = 'Y'                
+                    record['callers'] = ';'.join(sorted(list(set([uvid.split('__')[0] for uvid in unique_variant_id_candidates]))))
+                    record['num_callers'] = len(unique_variant_id_candidates)
+                    record['call_source'] = select_uvid.split('__')[0]
+                    record['other_variant_ids'] = ';'.join([id for id in unique_variant_id_candidates if id != select_uvid])                                    
+
+                    # gather and write lineOut
+                    lineOut = []
+                    for field in header1:
+                        lineOut.append(str(record[field]))
+                    out1.write('\t'.join(lineOut) + '\n')
+
+                    # write vcf line out
+                    lineOut = get_vcf_line_out(header2,record)
+                    out2.write('\t'.join(lineOut) + '\n')                
+                
+                    # keep track of variants written
+                    for uvid in unique_variant_id_candidates:
+                        written_variant_ids[uvid] = '.'
                     
-                record = df_all[df_all['unique_variant_id'] == select_uvid].squeeze()
-                record = record.to_dict()
+                # ** category #2 - no match **
+                else:
+                    # * variant_id - pull values from df_all from original caller * 
+                    record = row
+                    record = record.to_dict()
 
-                # update with missing columns
-                record['is_matching'] = 'Y'                
-                record['callers'] = ';'.join(sorted(list(set([uvid.split('__')[0] for uvid in unique_variant_id_candidates]))))
-                record['num_callers'] = len(unique_variant_id_candidates)
-                record['call_source'] = select_uvid.split('__')[0]
-                record['other_variant_ids'] = ';'.join([id for id in unique_variant_id_candidates if id != select_uvid])                                    
-
-                # gather and write lineOut
-                lineOut = []
-                for field in header1:
-                    lineOut.append(str(record[field]))
-                out1.write('\t'.join(lineOut) + '\n')
-
-                # write vcf line out
-                lineOut = get_vcf_line_out(header2,record)
-                out2.write('\t'.join(lineOut) + '\n')                
+                    # update with missing columns
+                    record['is_matching'] = 'N'                
+                    record['callers'] = caller
+                    record['num_callers'] = 1
+                    record['call_source'] = caller
+                    record['other_variant_ids'] = '.'
                 
-                # keep track of variants written
-                for uvid in unique_variant_id_candidates:
-                    written_variant_ids[uvid] = '.'
-                    
-            # ** category #2 - no match **
-            else:
-                # * variant_id - pull values from df_all from original caller * 
-                record = df_all[idx_all].squeeze()
-                record = record.to_dict()
+                    # gather and write lineOut
+                    lineOut = []
+                    for field in header1:
+                        lineOut.append(str(record[field]))
+                    out1.write('\t'.join(lineOut) + '\n')
 
-                # update with missing columns
-                record['is_matching'] = 'N'                
-                record['callers'] = caller
-                record['num_callers'] = 1
-                record['call_source'] = caller
-                record['other_variant_ids'] = '.'
+                    # write vcf line out
+                    lineOut = get_vcf_line_out(header2,record)
+                    out2.write('\t'.join(lineOut) + '\n')                
                 
-                # gather and write lineOut
-                lineOut = []
-                for field in header1:
-                    lineOut.append(str(record[field]))
-                out1.write('\t'.join(lineOut) + '\n')
+                    # keep track of variants written
+                    written_variant_ids[unique_variant_id] = '.'
 
-                # write vcf line out
-                lineOut = get_vcf_line_out(header2,record)
-                out2.write('\t'.join(lineOut) + '\n')                
-                
-                # keep track of variants written
-                written_variant_ids[unique_variant_id] = '.'
-                
     if verbose:
         print('done')
 # **
