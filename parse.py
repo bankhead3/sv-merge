@@ -58,6 +58,33 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
 # *** modify manta calls to be comparable with other sv callers ***
 def modify_manta(inFile,out_dir,sample,verbose):
     df = pd.read_csv(inFile,sep="\t",na_values = 'NA',na_filter = False)
+
+    # ** manta labeling patch **
+    df = df.sort_values(by='variant_id')
+    events = sorted(list(set(list(df['event_id']))))
+    for event in events:
+        idx = df['event_id'] == event
+        idxs = list(df[idx].index)
+        assert len(idxs) <= 2
+
+        # for cases when we have 2 variants as part of the event
+        if len(idxs) == 2:
+            chrom1 = df.at[idxs[0],'chrom']
+            chrom2 = df.at[idxs[1],'chrom']
+            pos1 = df.at[idxs[0],'pos']
+            pos2 = df.at[idxs[1],'pos']
+            variant1 = df.at[idxs[0],'variant_id']
+            variant2 = df.at[idxs[1],'variant_id']            
+
+            # swap if labels if pos2 is higher - otherwise granges will complain in combine script...
+            if chrom1 == chrom2 and int(pos1) > int(pos2):
+                df.at[idxs[0],'variant_id'] = variant2
+                df.at[idxs[1],'variant_id'] = variant1
+                df.at[idxs[0],'mate_id'] = variant1
+                df.at[idxs[1],'mate_id'] = variant2
+    df = df.sort_values(by='variant_id')
+    # ** 
+    
     outFile1 = out_dir + sample + '-manta_modified.txt'
     with open(outFile1,'w') as out1:
         # assemble and write yo header
