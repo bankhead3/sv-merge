@@ -57,7 +57,7 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
 
 # *** modify manta calls to be comparable with other sv callers ***
 def modify_manta(inFile,out_dir,sample,verbose):
-    df = pd.read_csv(inFile,sep="\t",na_values = 'NA',na_filter = False)
+    df = pd.read_csv(inFile,sep="\t",na_values = 'NA',na_filter = False, dtype = 'unicode')
 
     # ** manta variant_id labeing patch **
     # updated to group by events and then iterate through events looking for out of order variant_id labels (manta issue)
