@@ -76,7 +76,7 @@ def modify_manta(inFile,out_dir,sample,verbose):
             variant1,variant2 = group['variant_id']
 
             # look for intra chom events that are out of order
-            if chrom1 == chrom2 and pos1 > pos2:
+            if chrom1 == chrom2 and int(pos1) > int(pos2):
                 df.loc[group.index, 'variant_id'] = [variant2, variant1]
                 df.loc[group.index, 'mate_id'] = [variant1, variant2]
     df = df.sort_values(by='variant_id')
@@ -219,7 +219,7 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
             record['alt'] = str(record['alt'][0])
 
             # only show standard chroms
-            if record['chrom'] in chroms and 'chrUn' not in record['alt'] and 'alt' not in record['alt'] and 'random' not in record['alt']:
+            if record['chrom'] in chroms and 'chrUn' not in record['alt'] and 'alt' not in record['alt'] and 'random' not in record['alt'] and 'HLA-' not in record['alt']:
                 record['mate_id'] = 'NA' if 'MATEID' not in info else info['MATEID'][0]
 
                 # event_id should uniquely represent each bnd pair and other events
@@ -315,7 +315,7 @@ def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba):
             record['chrom'],record['pos'],record['ref'],record['alt'] = vcf_record.CHROM,vcf_record.POS,vcf_record.REF,vcf_record.ALT
             record['alt'] = str(record['alt'][0])
 
-            if record['chrom'] in chroms and 'chrUn' not in record['alt'] and 'alt' not in record['alt']:
+            if record['chrom'] in chroms and 'chrUn' not in record['alt'] and 'alt' not in record['alt'] and 'random' not in record['alt'] and 'HLA-' not in record['alt']:            
                 record['mate_id'] = 'NA' if 'MATEID' not in info else info['MATEID']
 
                 # get event_id
