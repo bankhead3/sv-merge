@@ -1,5 +1,5 @@
 # sv-merge #
-A tool to perform sample-specific merging of SV vcf files by taking the intersection of variant events using a slack allowance for matching.  Generates combined table with all calls where matching calls have been combined.
+A python tool to perform sample-specific merging of SV vcf files by combining events with matching breakends given a slack parameter (e.g. 200bp).  Creates combined .txt and .vcf files.
 ## Requirements
 * python3
 * python packages: pandas, pyranges, PyVCF
