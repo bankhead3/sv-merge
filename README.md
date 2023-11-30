@@ -16,6 +16,6 @@ A tool to perform sample-specific merging of SV vcf files by taking the intersec
 ## Assumptions and caveats to be aware of...
 * Currently: only manta and svaba calls are supported 
 * Non-standard chromosome (e.g. alt, random, Unknown) are excluded
-* Current version does not require that all calls for a given event match a single event with both calls matching.  Matching can occur between 2 variants from a single event to 2 variants from 2 events.  Reason is that 'manta' often represents events as a single variant.  Very little matches otherwise.
+* Merged events require that both breakends match within 200bp
 * If something doesn't work the way it should - let's discuss and fix
 
