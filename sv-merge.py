@@ -8,7 +8,7 @@ from parse import parse_vcfs
 from compare import compare
 from merge import merge
 
-parser = argparse.ArgumentParser(prog='merge-svs', description='Combines structural variant (SV) calls from multiple caller vcfs for a given sample.', epilog='manta and svaba currently supported')
+parser = argparse.ArgumentParser(prog='sv-merge.py', description='Combines structural variant (SV) calls from multiple caller vcfs for a given sample.', epilog='manta and svaba currently supported')
 parser.add_argument('-v','--vcfs', help = 'Vcf file names separated by a comma with no spaces.  2 vcfs required for comparison. If 1 vcf is provided it will be parsed.', required = True, dest = 'vcfs')
 parser.add_argument('-s','--sample-name', help = 'Sample name or label that will prefix output files',required = True, dest = 'sample')
 # parser.add_argument('-t','--save-tmp-files', help = 'Y or N indicating if intermediate temp tables should saved', required = False, dest = 'save_tmp')
