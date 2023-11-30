@@ -11,7 +11,8 @@ A tool to perform sample-specific merging of SV vcf files by taking the intersec
   1. caller.txt files: tab-delimited text file with all standard chromosome calls 
   2. comparison.txt files: file containing matched calls between different callers
   3. sv-merge.txt files: file containing the merged calls where calls by two or more callers have been combined
-![image](https://github.com/bankhead3/sv-merge/assets/31142967/c55f4a69-011b-4557-8d15-343433a2e4bb)
+
+![image](https://github.com/bankhead3/sv-merge/assets/31142967/55ce5a82-5684-4890-86de-3d4f4c06cd81)
 
 ## Assumptions and caveats to be aware of...
 * Currently: only manta and svaba calls are supported 
