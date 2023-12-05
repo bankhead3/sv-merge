@@ -8,6 +8,7 @@ import pyranges as pr
 # *** identify overlapping svs across callers ***
 def compare(df1,out_dir,sample,slack=200,verbose=True):
     callers = sorted(list(set(df1['caller'])))
+    outFile1 = out_dir + sample + '-comparison.txt'    
     
     if verbose:
         print('comparing ' + ' vs. '.join(callers) + ' ...',end='')
@@ -30,8 +31,12 @@ def compare(df1,out_dir,sample,slack=200,verbose=True):
         
         pr_joined = pr1a.join(pr1b,slack=slack,how = None, suffix='2',preserve_order=True)
 
-        # add difference
+
         df_joined = pr_joined.df
+        if df_joined.empty:
+            continue
+
+        # add difference        
         df_joined['difference'] = abs(df_joined['pos'].astype(int) - df_joined['pos2'].astype(int))
         df_joined['is_variant_match'] = True
 
@@ -41,7 +46,18 @@ def compare(df1,out_dir,sample,slack=200,verbose=True):
         else:
             df_comp = pd.concat([df_comp,df_joined],axis=0)            
 
-    
+    # ** for scenario when no overlapping variant_ids have been found
+    if first:
+        lineOut = 'no matching variants identified!'
+        with open(outFile1,'w') as out1:
+            out1.write(lineOut + '\n')
+        df_comp = pd.DataFrame({'event_id':[lineOut]})
+        print(lineOut)
+        if verbose:
+            print('done')
+        return df_comp
+    # **
+            
     # ** next look for matching events consisting of matching variant pairs **
     df_comp = df_comp.reset_index(drop = True)
     df_comp['is_event_match'] = False
@@ -131,7 +147,6 @@ def compare(df1,out_dir,sample,slack=200,verbose=True):
                     print(variant2_match)                
                     raise 'unexpected event matching scenario'
 
-    outFile1 = out_dir + sample + '-comparison.txt'    
     df_comp.to_csv(outFile1,sep="\t",index = False)
     if verbose:
         print('done')
