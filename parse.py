@@ -26,6 +26,9 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
                 elif 'svaba' in line:
                     caller = 'svaba'
                     break
+                elif 'gridss' in line:
+                    caller = 'gridss'
+                    break
 
         # call parse function
         if caller == 'manta':
@@ -33,6 +36,8 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
             filename = modify_manta(filename1,out_dir,sample,verbose) # generated updated manta call have 2 break points per manta del,ins,dup event
         elif caller == 'svaba':
             filename = parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba)
+        elif caller == 'gridss':
+            filename = parse_gridss(my_vcf,out_dir,sample,verbose)            
         else:
             print('Caller not recognized!!')
             raise
@@ -161,6 +166,14 @@ def infer_tumor_idx(vcf_reader,caller):
                 else:
                     # otherwise take from ad
                     counts[idx].append(vcf_record.samples[idx].data.AD)
+        elif caller == 'gridss':
+            for idx in range(0,2):
+                # first take from discordant read support if there is any
+                if vcf_record.samples[idx].data.SR != 0:
+                    counts[idx].append(vcf_record.samples[idx].data.SR)
+                else:
+                    # otherwise take from ad
+                    counts[idx].append(vcf_record.samples[idx].data.VF)
         else:
             raise 'i no understand now to infer_tumor_idx for this caller'
         
@@ -344,5 +357,96 @@ def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba):
         print('done')                
     return outFile1
 # *** end svaba SV parsing ***
-    
+
+# *** parse gridss sv vcf ***
+def parse_gridss(my_vcf,out_dir,sample,verbose):
+
+    outFile1 = out_dir + sample + '-gridss.txt'
+    with open(outFile1,'w') as out1:
+        header = ['sample','caller','event_id','variant_id','variant_type','chrom','pos','ref','alt','mate_id','tumor_discordant_rs','tumor_spanning_rs','tumor_dp','intra_chrom_event_length']
+
+        # assemble and write yo header
+        out1.write('\t'.join(header) + '\n')
+        
+        if verbose:
+            print('parsing ' + my_vcf + ' ...',end='')    
+        vcf_reader = vcf.Reader(filename=my_vcf)
+
+        # determine which genotype field to read from as tumor
+        vcf_reader = vcf.Reader(filename=my_vcf)        
+        assert len(vcf_reader.samples) in [1,2]
+        if len(vcf_reader.samples) == 1:
+            tumor_idx = 0
+        else:
+            # since tumor may not always be last, confirm that it is and throw a warning if it's not
+            tumor_idx = infer_tumor_idx(vcf_reader, 'gridss')
+
+        # iterate and read through vcf records
+        vcf_reader = vcf.Reader(filename=my_vcf)
+        for vcf_record in vcf_reader:
+            record = {'sample':sample,'caller':'gridss'}
+
+            info = vcf_record.INFO
+
+            record['variant_type'] = info['SVTYPE']
+            record['variant_id'] = vcf_record.ID
+            record['chrom'],record['pos'],record['ref'],record['alt'] = vcf_record.CHROM,vcf_record.POS,vcf_record.REF,vcf_record.ALT
+            record['alt'] = str(record['alt'][0])
+
+            if record['chrom'] in chroms and 'chrUn' not in record['alt'] and 'alt' not in record['alt'] and 'random' not in record['alt'] and 'HLA-' not in record['alt']:            
+                record['mate_id'] = 'NA' if 'MATEID' not in info else info['MATEID'][0]
+
+                # get event_id
+                record['event_id'] = info['EVENT']
+
+                
+                record['intra_chrom_event_length'] = 'NA' # needs to be filled in later
+
+                # get genotype support information for tumor sample
+                # leaving out normal support for now
+                vcf_samples = vcf_record.samples
+                vcf_sample = vcf_record.samples[tumor_idx]
+
+                record['tumor_discordant_rs'] = vcf_sample.data.SR
+                record['tumor_spanning_rs'] = vcf_sample.data.VF  # note this is fragment support - labeling as rs for consistency 
+                record['tumor_dp'] = vcf_sample.data.REF
+
+                # assemble and write line out
+                lineOut = []
+                for field in header:
+                    lineOut.append(str(record[field]))
+                out1.write('\t'.join(lineOut) + '\n')
+
+    # ** need to re-read and infer span as this not something that gridss provides **
+    df = pd.read_csv(outFile1,sep="\t",na_values = 'NA',na_filter = False, dtype = 'unicode')
+    df = df.sort_values(by='variant_id')
+    grouped_df = df.groupby('event_id')
+    for event,group in grouped_df:
+        assert len(group) <= 2
+
+        # only care about events with 2 variants
+        if len(group) == 2:
+            
+            # Extract values for comparison
+            chrom1,chrom2 = group['chrom']
+            pos1,pos2 = group['pos']
+            variant1,variant2 = group['variant_id']
+            span = -1 if chrom1 != chrom2 else str(abs(int(pos1) - int(pos2)))
+            
+            # look for intra chom events that are out of order and re-label
+            if chrom1 == chrom2 and int(pos1) > int(pos2):
+                df.loc[group.index, 'variant_id'] = [variant2, variant1]
+                df.loc[group.index, 'mate_id'] = [variant1, variant2]
+
+            # update span
+            df.loc[group.index,'intra_chrom_event_length'] = [span,span]
+    df = df.sort_values(by='variant_id')
+    df.to_csv(outFile1,sep="\t",index = False)
+                
+    if verbose:                
+        print('done')
+        
+    return outFile1
+# *** end gridss SV parsing ***
+
         
