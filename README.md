@@ -6,7 +6,7 @@ A python tool to perform sample-specific merging of SV vcf files by combining ev
 
 ## Usage
 * download this github repo
-* to run: sv-merge/sv-merge.py --vcfs sample.manta.vcf,sample.svaba.vcf --sample-name sample
+* to run: sv-merge/sv-merge.py --vcfs sample.manta.vcf,sample.svaba.vcf,sample.gridds.vcf --sample-name sample
 * creates 3 types of files:
   1. caller.txt files: tab-delimited text file with all standard chromosome calls 
   2. comparison.txt files: file containing matched calls between different callers
@@ -15,9 +15,9 @@ A python tool to perform sample-specific merging of SV vcf files by combining ev
 ![image](https://github.com/bankhead3/sv-merge/assets/31142967/55ce5a82-5684-4890-86de-3d4f4c06cd81)
 
 ## Assumptions and caveats to be aware of...
-* Currently: only manta and svaba calls are supported 
+* Currently: manta,svaba,gridss calls supported 
 * Non-standard chromosome (e.g. alt, random, Unknown) are excluded
 * Merged events require that both breakends match within 200bp
-* manta del,ins,tandem dup events not merged due to missing alt information.  All events are parsed and written to caller.txt files.
+* manta/gridss del,ins,tandem dup events not merged due to missing alt orientation information.  All events are parsed and written to caller.txt files.
 * If something doesn't work the way it should - let's discuss and fix
 

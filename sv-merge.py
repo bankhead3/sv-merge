@@ -15,7 +15,7 @@ parser.add_argument('-s','--sample-name', help = 'Sample name or label that will
 parser.add_argument('-o','--outdir', help = 'Path to destination directory', required = False, dest = 'outdir')
 parser.add_argument('--slack', help = 'Allowance in bps for imperfect variant position comparisons.  Default is 200', required = False, dest = 'slack', type = int, default = '200')
 parser.add_argument('--verbose', help = 'T or F for screen output.  Default is T for true', required = False, dest = 'verbose', default = 'T')
-parser.add_argument('--caller-order', help = 'Order of variant callers to show call details when calls match. example: svaba,manta', required = False, dest = 'caller_order', default = 'svaba,manta')
+parser.add_argument('--caller-order', help = 'Order of variant callers to show call details when calls match. example: svaba,manta,gridss', required = False, dest = 'caller_order', default = 'svaba,manta,gridss')
 args = parser.parse_args()
 
 vcfs=args.vcfs
