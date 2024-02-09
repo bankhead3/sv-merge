@@ -1,8 +1,6 @@
 #!/usr/bin/env python
 # create final table with calls merged such that variants are unique
 
-import pandas as pd
-
 # ** create vcf formatted line out **
 def get_vcf_line_out(header2,record):
     lookup = {'#CHROM':'chrom','POS':'pos','REF':'ref','ALT':'alt','ID':'variant_id','QUAL':'100','FILTER':'PASS'}
@@ -45,13 +43,10 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
         outFiles = ','.join([outFile1,outFile2])
         print('merging and writing to ' + outFiles + ' ...',end='')    
 
-    any_overlaps = False if sum(df_comp['event_id'] == 'no matching variants identified!') == 1 else True
-        
     # get list of variant universe
     df_all['unique_variant_id'] = df_all['caller'] + '__' + df_all['variant_id']
-    df_all['unique_event_id'] = df_all['caller'] + '__' + df_all['event_id']
-    if any_overlaps:
-        df_comp['unique_variant_id_matches'] = df_comp['caller2'] + '__' + df_comp['variant_id2']
+    df_all['unique_event_id'] = df_all['caller'] + '__' + df_all['event_id']    
+    df_comp['unique_variant_id_matches'] = df_comp['caller2'] + '__' + df_comp['variant_id2']
 
     # re-index for faster lookup
     df_all_idx = df_all.set_index('unique_variant_id')
@@ -99,12 +94,9 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
                 if unique_variant_id in written_variant_ids or not ('[' in row['alt'] or ']' in row['alt']):
                     continue
 
-                if any_overlaps:
-                    # find out if there is a match in comp table
-                    idx_comp_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_event_match'] == True) 
-                else:
-                    idx_comp_variant = pd.Series([False])
-                    
+                # find out if there is a match in comp table
+                idx_comp_variant = (df_comp['variant_id'] == variant_id) & (df_comp['is_event_match'] == True) 
+
                 # ** category #1 - we have a match **
                 if sum(idx_comp_variant) >= 1:
 
@@ -136,7 +128,7 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
                     # update with missing columns
                     record['is_matching'] = 'Y'                
                     record['callers'] = ';'.join(sorted(list(set([uvid.split('__')[0] for uvid in unique_variant_id_candidates]))))
-                    record['num_callers'] = record['callers'].count(';') + 1
+                    record['num_callers'] = len(unique_variant_id_candidates)
                     record['call_source'] = select_uvid.split('__')[0]
                     record['other_variant_ids'] = ';'.join([id for id in unique_variant_id_candidates if id != select_uvid])                                    
 
