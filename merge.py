@@ -91,7 +91,8 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
                 caller,variant_id = unique_variant_id.split('__')
 
                 # check that it hasn't already been written and that it has orientation information
-                if unique_variant_id in written_variant_ids or not ('[' in row['alt'] or ']' in row['alt']):
+                # allow manta odd variants through so they can be rescued
+                if unique_variant_id in written_variant_ids:  # or not ('[' in row['alt'] or ']' in row['alt']):  
                     continue
 
                 # find out if there is a match in comp table
