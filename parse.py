@@ -155,7 +155,7 @@ def infer_tumor_idx(vcf_reader,caller):
                 if hasattr(vcf_record.samples[idx].data,'SR'):
                     counts[idx].append(vcf_record.samples[idx].data.SR[1])
                 else:
-                    # else take from spanning read support
+                    # else take from paired read support
                     assert hasattr(vcf_record.samples[idx].data,'PR')
                     counts[idx].append(vcf_record.samples[idx].data.PR[1])
         elif caller == 'svaba':
@@ -244,13 +244,16 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
                     record['event_id'] = ids[0]
                 
                 # get read support info for tumor only for easy support of both tumor and tumor vs normal
-                if hasattr(vcf_record.samples[tumor_idx].data,'PR'):
-                    values = vcf_record.samples[tumor_idx].data.PR
+                # for manta SR is split read support - analogous to spanning read support for svaba
+                if hasattr(vcf_record.samples[tumor_idx].data,'SR'):
+                    values = vcf_record.samples[tumor_idx].data.SR
                     record['tumor_spanning_rs'] = values[1]
                 else:
                     record['tumor_spanning_rs'] = 0
-                if hasattr(vcf_record.samples[tumor_idx].data,'SR'):
-                    values = vcf_record.samples[tumor_idx].data.SR
+
+                # for manta PR is paired read support - analogous to discordant read support for svaba                
+                if hasattr(vcf_record.samples[tumor_idx].data,'PR'):
+                    values = vcf_record.samples[tumor_idx].data.PR
                     record['tumor_discordant_rs'] = values[1]
                 else:
                     record['tumor_discordant_rs'] = 0
