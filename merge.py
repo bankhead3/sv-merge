@@ -129,7 +129,7 @@ def merge(df_all,df_comp,out_dir,sample,verbose,caller_order = ['svaba','manta']
                     # update with missing columns
                     record['is_matching'] = 'Y'                
                     record['callers'] = ';'.join(sorted(list(set([uvid.split('__')[0] for uvid in unique_variant_id_candidates]))))
-                    record['num_callers'] = len(unique_variant_id_candidates)
+                    record['num_callers'] = record['callers'].count(';') + 1
                     record['call_source'] = select_uvid.split('__')[0]
                     record['other_variant_ids'] = ';'.join([id for id in unique_variant_id_candidates if id != select_uvid])                                    
 
