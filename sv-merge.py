@@ -16,6 +16,7 @@ parser.add_argument('-o','--outdir', help = 'Path to destination directory', req
 parser.add_argument('--slack', help = 'Allowance in bps for imperfect variant position comparisons.  Default is 200', required = False, dest = 'slack', type = int, default = '200')
 parser.add_argument('--verbose', help = 'T or F for screen output.  Default is T for true', required = False, dest = 'verbose', default = 'T')
 parser.add_argument('--caller-order', help = 'Order of variant callers to show call details when calls match. example: svaba,manta,gridss', required = False, dest = 'caller_order', default = 'svaba,manta,gridss')
+parser.add_argument('-n','--number-svs', help = 'debug param for selected the first N SVs from each vcf. default is -1 to turn off and process all SVs. example: 100', required = False, dest = 'num', default = '-1')
 args = parser.parse_args()
 
 vcfs=args.vcfs
@@ -25,6 +26,7 @@ out_dir = args.outdir if args.outdir[-1] == '/' else args.outdir + '/'
 slack = args.slack
 verbose = True if args.verbose == 'T' else False
 caller_order = args.caller_order.split(',')
+numSVs = int(args.num)
 
 if not os.path.exists(out_dir):
     os.makedirs(out_dir)
@@ -33,7 +35,7 @@ def main():
     vcf_list = sorted(vcfs.split(','))
     
     # parse vcfs
-    df_all = parse_vcfs(vcf_list,out_dir,sample,verbose)
+    df_all = parse_vcfs(vcf_list,out_dir,sample,verbose,numSVs)
 
     if len(vcf_list) > 1:  # only possible to compare more than 1 vcf
         # compare calls

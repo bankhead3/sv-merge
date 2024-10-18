@@ -8,7 +8,7 @@ import vcf,os,re
 chroms = ['chr1','chr2','chr3','chr4','chr5','chr6','chr7','chr8','chr9','chr10','chr11','chr12','chr13','chr14','chr15','chr16','chr17','chr18','chr19','chr20','chr21','chr22','chrX', 'chrY','chrM']
 
 # *** determine caller, parse, generate a data frame ***
-def parse_vcfs(vcf_list,out_dir,sample,verbose):
+def parse_vcfs(vcf_list,out_dir,sample,verbose,numSVs):
 
     filenames = []
 
@@ -32,12 +32,12 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose):
 
         # call parse function
         if caller == 'manta':
-            filename1 = parse_manta(my_vcf,out_dir,sample,verbose)
+            filename1 = parse_manta(my_vcf,out_dir,sample,verbose,numSVs)
             filename = modify_manta(filename1,out_dir,sample,verbose) # generated updated manta call have 2 break points per manta del,ins,dup event
         elif caller == 'svaba':
-            filename = parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba)
+            filename = parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba,numSVs)
         elif caller == 'gridss':
-            filename = parse_gridss(my_vcf,out_dir,sample,verbose)            
+            filename = parse_gridss(my_vcf,out_dir,sample,verbose,numSVs)            
         else:
             print('Caller not recognized!!')
             raise
@@ -196,7 +196,7 @@ def infer_tumor_idx(vcf_reader,caller):
     return larger_idx
 
 # *** parse manta vcf and return df ***
-def parse_manta(my_vcf,out_dir,sample,verbose):
+def parse_manta(my_vcf,out_dir,sample,verbose,numSVs):
     outFile1 = out_dir + sample + '-manta.txt'
     with open(outFile1,'w') as out1:
         # assemble and write yo header
@@ -216,8 +216,10 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
             tumor_idx = infer_tumor_idx(vcf_reader, 'manta')
 
         # iterate and read through vcf records
+        count = 0
         vcf_reader = vcf.Reader(filename=my_vcf)            
         for vcf_record in vcf_reader:
+            count += 1
             record = {'sample':sample,'caller':'manta'}
 
             info = vcf_record.INFO
@@ -287,13 +289,18 @@ def parse_manta(my_vcf,out_dir,sample,verbose):
                 for field in header:
                     lineOut.append(str(record[field]))
                 out1.write('\t'.join(lineOut) + '\n')
+
+                # end early if testing
+                if numSVs != -1 and count >= numSVs:
+                    break
+                
     if verbose:                
         print('done')
     return outFile1
 # ***
     
 # *** parse svaba sv vcf ***
-def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba):
+def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba,numSVs):
 
     vcf_type = 'sv' if 'sv.vcf' in my_vcf else 'indel'
     flag = 'w' if vcf_type == 'indel' or not multi_svaba else 'a'
@@ -320,8 +327,10 @@ def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba):
             tumor_idx = infer_tumor_idx(vcf_reader, 'svaba')
 
         # iterate and read through vcf records
+        count = 0
         vcf_reader = vcf.Reader(filename=my_vcf)
         for vcf_record in vcf_reader:
+            count += 1
             record = {'sample':sample,'caller':'svaba'}
 
             info = vcf_record.INFO
@@ -356,13 +365,17 @@ def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba):
                 for field in header:
                     lineOut.append(str(record[field]))
                 out1.write('\t'.join(lineOut) + '\n')
+
+                # end early if testing
+                if numSVs != -1 and count >= numSVs:
+                    break
     if verbose:                
         print('done')                
     return outFile1
 # *** end svaba SV parsing ***
 
 # *** parse gridss sv vcf ***
-def parse_gridss(my_vcf,out_dir,sample,verbose):
+def parse_gridss(my_vcf,out_dir,sample,verbose,numSVs):
 
     outFile1 = out_dir + sample + '-gridss.txt'
     with open(outFile1,'w') as out1:
@@ -385,8 +398,10 @@ def parse_gridss(my_vcf,out_dir,sample,verbose):
             tumor_idx = infer_tumor_idx(vcf_reader, 'gridss')
 
         # iterate and read through vcf records
+        count = 0
         vcf_reader = vcf.Reader(filename=my_vcf)
         for vcf_record in vcf_reader:
+            count += 1
             record = {'sample':sample,'caller':'gridss'}
 
             info = vcf_record.INFO
@@ -419,6 +434,10 @@ def parse_gridss(my_vcf,out_dir,sample,verbose):
                 for field in header:
                     lineOut.append(str(record[field]))
                 out1.write('\t'.join(lineOut) + '\n')
+
+                # end early if testing
+                if numSVs != -1 and count >= numSVs:
+                    break
 
     # ** need to re-read and infer span as this not something that gridss provides **
     df = pd.read_csv(outFile1,sep="\t",na_values = 'NA',na_filter = False, dtype = 'unicode')
