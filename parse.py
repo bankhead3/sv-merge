@@ -8,13 +8,13 @@ import vcf,os,re
 chroms = ['chr1','chr2','chr3','chr4','chr5','chr6','chr7','chr8','chr9','chr10','chr11','chr12','chr13','chr14','chr15','chr16','chr17','chr18','chr19','chr20','chr21','chr22','chrX', 'chrY','chrM']
 
 # *** determine caller, parse, generate a data frame ***
-def parse_vcfs(vcf_list,out_dir,sample,verbose,numSVs):
+def parse_vcfs(vcf_list,out_dir,sample,numSVs,verbose):
 
     filenames = []
 
     # check if more than one svaba file - impacts combining calls when parsing
     multi_svaba = True if len([file for file in vcf_list if 'svaba' in file]) > 1 else False
-    
+
     for my_vcf in vcf_list:
         # determine caller
         with open(my_vcf) as in1:
@@ -44,6 +44,9 @@ def parse_vcfs(vcf_list,out_dir,sample,verbose,numSVs):
         filenames.append(filename)
 
     filenames = sorted(list(set(filenames)))
+
+#    filenames = ['intermediate/02/results/LNCaP_16D-gridss.txt', 'intermediate/02/results/LNCaP_16D-manta_modified.txt', 'intermediate/02/results/LNCaP_16D-svaba.txt']
+#    print(filenames)
     
     # generate combined table 
     flag = None
@@ -66,7 +69,6 @@ def modify_manta(inFile,out_dir,sample,verbose):
 
     # ** manta variant_id labeing patch **
     # updated to group by events and then iterate through events looking for out of order variant_id labels (manta issue)
-    print('checking event variant_id ordering...')    
     df = df.sort_values(by='variant_id')
     grouped_df = df.groupby('event_id')
     for event,group in grouped_df:
@@ -95,7 +97,7 @@ def modify_manta(inFile,out_dir,sample,verbose):
         out1.write('\t'.join(header) + '\n')
 
         if verbose:
-            print('modifying manta calls for compatibility ...',end='')
+            print('modifying manta calls for compatibility ...',end='',flush=True)
 
         for index,row in df.iterrows():
             variant_type = row['variant_type']
@@ -204,7 +206,7 @@ def parse_manta(my_vcf,out_dir,sample,verbose,numSVs):
         out1.write('\t'.join(header) + '\n')
 
         if verbose:
-            print('parsing ' + my_vcf + ' ...',end='')
+            print('parsing ' + my_vcf + ' ...',end='',flush=True)
 
         # determine which genotype field to read from as tumor
         vcf_reader = vcf.Reader(filename=my_vcf)        
@@ -314,7 +316,7 @@ def parse_svaba(my_vcf,out_dir,sample,verbose,multi_svaba,numSVs):
             # assemble and write yo header
             out1.write('\t'.join(header) + '\n')
         if verbose:
-            print('parsing ' + my_vcf + ' ...',end='')    
+            print('parsing ' + my_vcf + ' ...',end='',flush=True)    
         vcf_reader = vcf.Reader(filename=my_vcf)
 
         # determine which genotype field to read from as tumor
@@ -385,7 +387,7 @@ def parse_gridss(my_vcf,out_dir,sample,verbose,numSVs):
         out1.write('\t'.join(header) + '\n')
         
         if verbose:
-            print('parsing ' + my_vcf + ' ...',end='')    
+            print('parsing ' + my_vcf + ' ...',end='',flush=True)    
         vcf_reader = vcf.Reader(filename=my_vcf)
 
         # determine which genotype field to read from as tumor
@@ -399,6 +401,9 @@ def parse_gridss(my_vcf,out_dir,sample,verbose,numSVs):
 
         # iterate and read through vcf records
         count = 0
+        records = {}
+        event2variants = {}
+        allVariants = []
         vcf_reader = vcf.Reader(filename=my_vcf)
         for vcf_record in vcf_reader:
             count += 1
@@ -408,6 +413,8 @@ def parse_gridss(my_vcf,out_dir,sample,verbose,numSVs):
 
             record['variant_type'] = info['SVTYPE']
             record['variant_id'] = vcf_record.ID
+            variant_id = record['variant_id']
+
             record['chrom'],record['pos'],record['ref'],record['alt'] = vcf_record.CHROM,vcf_record.POS,vcf_record.REF,vcf_record.ALT
             record['alt'] = str(record['alt'][0])
 
@@ -416,7 +423,7 @@ def parse_gridss(my_vcf,out_dir,sample,verbose,numSVs):
 
                 # get event_id
                 record['event_id'] = info['EVENT']
-
+                event_id = record['event_id']
                 
                 record['intra_chrom_event_length'] = 'NA' # needs to be filled in later
 
@@ -429,45 +436,53 @@ def parse_gridss(my_vcf,out_dir,sample,verbose,numSVs):
                 record['tumor_spanning_rs'] = vcf_sample.data.VF  # note this is fragment support - labeling as rs for consistency 
                 record['tumor_dp'] = vcf_sample.data.REF
 
-                # assemble and write line out
+                # assemble and add lineOut dictionary to records to be converted to data frame
                 lineOut = []
                 for field in header:
                     lineOut.append(str(record[field]))
-                out1.write('\t'.join(lineOut) + '\n')
+                lineDict = dict(zip(header,lineOut))
+                records[variant_id] = lineDict                
 
+                # ** keep track of event and associated variants to fix missing span and potential order issues **
+                allVariants.append(variant_id)                
+                if event_id not in event2variants:
+                    event2variants[event_id] = [variant_id]
+                else:
+                    event2variants[event_id] = sorted(event2variants[event_id] + [variant_id])
+                    variants = event2variants[event_id]
+
+                    if len(variants) == 2:
+                        variant1,variant2 = variants
+                        
+                        # Extract values for comparison
+                        chrom1,chrom2 = records[variant1]['chrom'],records[variant2]['chrom']
+                        pos1,pos2 = records[variant1]['pos'],records[variant2]['pos']                        
+                        span = -1 if chrom1 != chrom2 else str(abs(int(pos1) - int(pos2)))
+
+                        records[variant1]['intra_chrom_event_length'] = span
+                        records[variant2]['intra_chrom_event_length'] = span
+
+                        if chrom1 == chrom2 and int(pos1) > int(pos2):
+                            records[variant1]['variant_id'] = variant2
+                            records[variant2]['variant_id'] = variant1
+                            records[variant1]['mate_id'] = variant1
+                            records[variant2]['mate_id'] = variant2                            
+                            
                 # end early if testing
                 if numSVs != -1 and count >= numSVs:
                     break
 
-    # ** need to re-read and infer span as this not something that gridss provides **
-    df = pd.read_csv(outFile1,sep="\t",na_values = 'NA',na_filter = False, dtype = 'unicode')
-    df = df.sort_values(by='variant_id')
-    grouped_df = df.groupby('event_id')
-    for event,group in grouped_df:
-        assert len(group) <= 2
-
-        # only care about events with 2 variants
-        if len(group) == 2:
-            
-            # Extract values for comparison
-            chrom1,chrom2 = group['chrom']
-            pos1,pos2 = group['pos']
-            variant1,variant2 = group['variant_id']
-            span = -1 if chrom1 != chrom2 else str(abs(int(pos1) - int(pos2)))
-            
-            # look for intra chom events that are out of order and re-label
-            if chrom1 == chrom2 and int(pos1) > int(pos2):
-                df.loc[group.index, 'variant_id'] = [variant2, variant1]
-                df.loc[group.index, 'mate_id'] = [variant1, variant2]
-
-            # update span
-            df.loc[group.index,'intra_chrom_event_length'] = [span,span]
-    df = df.sort_values(by='variant_id')
+    # yo load into a df and write it yo
+    records2 = []
+    for variant in allVariants:
+        records2.append(records[variant])
+    df = pd.DataFrame(records2)
+    df = df.sort_values(by='variant_id') 
     df.to_csv(outFile1,sep="\t",index = False)
-                
+
     if verbose:                
         print('done')
-        
+
     return outFile1
 # *** end gridss SV parsing ***
 
