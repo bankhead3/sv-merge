@@ -51,7 +51,7 @@ def main():
         dfMatches2 = select(dfMatches1,out_dir,sample,caller_order,verbose)
 
         # merge calls to be
-        dfMatches2 = pd.read_csv('intermediate/02/results/LNCaP_APIPC-matches2.txt',sep="\t")   # for testing
+#        dfMatches2 = pd.read_csv('intermediate/02/results/LNCaP_APIPC-matches2.txt',sep="\t")   # for testing
         merge(df_all,dfMatches2,out_dir,sample,verbose,caller_order)
     
 if __name__ == '__main__':
