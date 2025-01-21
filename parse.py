@@ -9,7 +9,7 @@ chroms = ['chr1','chr2','chr3','chr4','chr5','chr6','chr7','chr8','chr9','chr10'
 
 # *** determine caller, parse, generate a data frame ***
 def parse_vcfs(vcf_list,out_dir,sample,numSVs,verbose):
-
+#    """
     filenames = []
 
     # check if more than one svaba file - impacts combining calls when parsing
@@ -44,8 +44,8 @@ def parse_vcfs(vcf_list,out_dir,sample,numSVs,verbose):
         filenames.append(filename)
 
     filenames = sorted(list(set(filenames)))
-
-#    filenames = ['intermediate/02/results/LNCaP_16D-gridss.txt', 'intermediate/02/results/LNCaP_16D-manta_modified.txt', 'intermediate/02/results/LNCaP_16D-svaba.txt']
+#    """
+#    filenames = ['intermediate/02/results/LNCaP_FGC-gridss.txt', 'intermediate/02/results/LNCaP_FGC-manta_modified.txt', 'intermediate/02/results/LNCaP_FGC-svaba.txt']
 #    print(filenames)
     
     # generate combined table 

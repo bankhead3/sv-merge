@@ -36,10 +36,12 @@ if not os.path.exists(out_dir):
 def main():
     # parse vcfs
     vcf_list = sorted(vcfs.split(','))
+
     df_all = parse_vcfs(vcf_list,out_dir,sample,numSVs,verbose)
 
     # mark duplicate calls 
     df_all = dedup(df_all,out_dir,sample,slack,recipOverlap,verbose)
+
 #    df_all = pd.read_csv('intermediate/02/results/LNCaP_APIPC-svs.txt',sep="\t")  # for testing
 
     if len(vcf_list) > 1:  # only possible to compare more than 1 vcf

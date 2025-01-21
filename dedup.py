@@ -10,7 +10,9 @@ def dedup(df_all,out_dir,sample,slack=200,recipOverlap=0.8,verbose = True):
     if(verbose):
         print('deduping...',flush=True)
 
+    # intialize variables
     df_all['id'] = df_all['sample'] + '__' + df_all['caller'] + '__' + df_all['event_id']  # uniq id to flag dups later
+    df_all['isDup'] = 'N'  
     
     # generate a list of duplicated ids to mark down
     callers = sorted(df_all['caller'].unique())
@@ -22,21 +24,22 @@ def dedup(df_all,out_dir,sample,slack=200,recipOverlap=0.8,verbose = True):
 
         # get dups and label
         dupIDs = identifyDups(df1,slack,recipOverlap,verbose)
-        df_all['isDup'] = np.where(df_all['id'].isin(dupIDs),'Y','N')
+        df_all['isDup'] = np.where((df_all['isDup'] == 'Y') | (df_all['id'].isin(dupIDs)),'Y','N') # :|
+        if verbose:
+            print('done')
 
     # write combined with dup annotation
     outFile = out_dir + sample + '-svs.txt'
     df_all.to_csv(outFile,sep="\t",index = False)
     
     if(verbose):    
-        print('done')
+        print('deduping done')
     return(df_all)
 
 # returns indexes of records that should be marked as duplicates
 def identifyDups(df1,slack=200,recipOverlap=0.8, verbose = True):
 
     df1 = df1.sort_values(by='variant_id')
-    ids = sorted(list(set(df1['id'])))
 
     df2 = convertPaired(df1,verbose)
     df2['dp'] = df2[['dp1','dp2']].min(axis=1)
@@ -75,7 +78,7 @@ def identifyDups(df1,slack=200,recipOverlap=0.8, verbose = True):
     df2d = df2c[idxDups]
     dupIDs1 = list(df2d['id'])  # these are intrachrom duplicates
     # **
-    
+
     # ** for interchrom events we compare breakpoints separately using slack **
     df3a = df2[df2['chrom1'] != df2['chrom2']].copy()
     df3b = df3a.copy()
