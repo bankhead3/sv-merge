@@ -70,13 +70,16 @@ def identifyDups(df1,slack=200,recipOverlap=0.8, verbose = True):
     
     # ** get intrachrom dups **
     df2c = df2b[(df2b['id'] != df2b['id_b']) & (df2b['ro'] >= recipOverlap) & (df2b['maxDiff'] <= slack)].copy()
-
+    
     # ** add matchid so that reciprical matches so that we can prioritize and select duplicates to mark **
-    df2c.loc[:,'matchID'] = df2c[['id','id_b']].apply(lambda x: '___'.join(sorted(x)),axis=1)
-    df2c = df2c.sort_values(by=['dp','id'],ascending=[False,True])    # order
-    idxDups = df2c['matchID'].duplicated(keep = 'first')
-    df2d = df2c[idxDups]
-    dupIDs1 = list(df2d['id'])  # these are intrachrom duplicates
+    if len(df2c) > 0:
+        df2c.loc[:,'matchID'] = df2c[['id','id_b']].apply(lambda x: '___'.join(sorted(x)),axis=1)
+        df2c = df2c.sort_values(by=['dp','id'],ascending=[False,True])    # order
+        idxDups = df2c['matchID'].duplicated(keep = 'first')
+        df2d = df2c[idxDups]
+        dupIDs1 = list(df2d['id'])  # these are intrachrom duplicates
+    else:
+        dupIDs1 = []
     # **
 
     # ** for interchrom events we compare breakpoints separately using slack **
