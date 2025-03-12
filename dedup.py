@@ -100,20 +100,25 @@ def identifyDups(df1,slack=200,recipOverlap=0.8, verbose = True):
     # ** add matchid so that reciprical matches so that we can prioritize and select duplicates to mark **
     df3d1 = df3d[df3d['id'] != df3d['id_b']].copy()
     df3e1 = df3e[df3e['id'] != df3e['id_b']].copy()
-    df3d1.loc[:,'matchID'] = df3d1[['id','id_b']].apply(lambda x: '___'.join(sorted(x)),axis=1)
-    df3e1.loc[:,'matchID'] = df3e1[['id','id_b']].apply(lambda x: '___'.join(sorted(x)),axis=1)
 
-    # get rid of reciprical matches
-    df3d1 = df3d1.sort_values(by=['spanning','dp','id'],ascending=[False,False,True])    # order
-    df3e1 = df3e1.sort_values(by=['spanning','dp','id'],ascending=[False,False,True])    # order    
-    idxDups3d1 = df3d1['matchID'].duplicated(keep = 'first')
-    idxDups3e1 = df3e1['matchID'].duplicated(keep = 'first')    
-    df3d2 = df3d1[idxDups3d1]
-    df3e2 = df3e1[idxDups3e1]        
+    # ** make sure we have candidate dups **
+    if len(df3d1) > 0 and len(df3e1) > 0:
+        df3d1.loc[:,'matchID'] = df3d1[['id','id_b']].apply(lambda x: '___'.join(sorted(x)),axis=1)
+        df3e1.loc[:,'matchID'] = df3e1[['id','id_b']].apply(lambda x: '___'.join(sorted(x)),axis=1)
 
-    # get list of dups and take intersection - look for start and ends that are close via slack
-    dups3d2 = list(df3d2['id'])
-    dups3e2 = list(df3e2['id'])
-    dupIDs2 = [id for id in dups3d2 if id in dups3e2]  # these are interchrom dups
+        # get rid of reciprical matches
+        df3d1 = df3d1.sort_values(by=['spanning','dp','id'],ascending=[False,False,True])    # order
+        df3e1 = df3e1.sort_values(by=['spanning','dp','id'],ascending=[False,False,True])    # order    
+        idxDups3d1 = df3d1['matchID'].duplicated(keep = 'first')
+        idxDups3e1 = df3e1['matchID'].duplicated(keep = 'first')    
+        df3d2 = df3d1[idxDups3d1]
+        df3e2 = df3e1[idxDups3e1]        
+
+        # get list of dups and take intersection - look for start and ends that are close via slack
+        dups3d2 = list(df3d2['id'])
+        dups3e2 = list(df3e2['id'])
+        dupIDs2 = [id for id in dups3d2 if id in dups3e2]  # these are interchrom dups
+    else:
+        dupIDs2 = []
 
     return(sorted(dupIDs1 + dupIDs2))
